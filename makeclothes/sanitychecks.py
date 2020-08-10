@@ -190,7 +190,7 @@ def checkSanityHuman(context):
 def checkSanityClothes(obj, humanobj=None):
     errortext = ""
     info  = ""
-    max_def_poles = 8
+    max_def_poles = 32
     errorcnt = 0
 
     icon = "\001"

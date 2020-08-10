@@ -252,7 +252,7 @@ class MakeClothes():
                 j = 0
                 exact = False
                 for (co, index, dist) in kdtree.find_n(vertex[1:], 3):
-                    if dist < 0.0001:
+                    if dist < 0.001:
                         vertexMatch.markExact(index)
                         exact = True
                     elif exact is False:
@@ -274,19 +274,20 @@ class MakeClothes():
                 maxScore = 1
                 for i in [0, 1, 2]:
                     vertIdx = vm.closestHumanVertexIndices[i]
-                    for polygon in self.humanmesh.vertPolygons[vertIdx]:
-                        faceIdx = polygon.index
-                        alreadyAdded = False
-                        for fm in faceMatches:
-                            if fm.faceIndex == faceIdx:
-                                alreadyAdded = True
-                                fm.score = fm.score + 1  # a face that matches more than one of our verts is more important
-                                if fm.score > maxScore:
-                                    maxScore = fm.score
-                                break
-                        if not alreadyAdded:
-                            fm = _FaceMatch(self.humanObj, faceIdx, [vm.x, vm.y, vm.z])
-                            faceMatches.append(fm)
+                    if vertIdx>=0:
+                        for polygon in self.humanmesh.vertPolygons[vertIdx]:
+                            faceIdx = polygon.index
+                            alreadyAdded = False
+                            for fm in faceMatches:
+                                if fm.faceIndex == faceIdx:
+                                    alreadyAdded = True
+                                    fm.score = fm.score + 1  # a face that matches more than one of our verts is more important
+                                    if fm.score > maxScore:
+                                        maxScore = fm.score
+                                        break
+                            if not alreadyAdded:
+                                fm = _FaceMatch(self.humanObj, faceIdx, [vm.x, vm.y, vm.z])
+                                faceMatches.append(fm)
                 bestFaceMatches = []
                 if maxScore == 1:
                     bestFaceMatches = faceMatches
@@ -539,6 +540,7 @@ class MakeClothes():
         mesh = self.clothesmesh.data
 
         outputFile = os.path.join(self.dirName, self.cleanedName + ".obj")
+        mesh.calc_normals_split()
         #
         # scale, rotation and origin are not necessary because everything has be applied before
         #
@@ -554,6 +556,7 @@ class MakeClothes():
                 # in this case we create vt and f a/b lines per vertex
                 # else create only f lines with one parameter per vertex
                 #
+                norm_cnt=1
                 if self.clothesmesh.has_uv:
                     texVerts = self.clothesmesh.texVerts
                     nTexVerts = len(texVerts)
@@ -565,9 +568,15 @@ class MakeClothes():
                     for polygon in mesh.polygons:
                         uvVerts = uvFaceVerts[polygon.index]
                         line = ["f"]
-                        for n,v in enumerate(polygon.vertices):
-                            (vt, uv) = uvVerts[n]
-                            line.append("%d/%d" % (v+1, vt+1))
+                        i=0
+                        for li in polygon.loop_indices:
+                            loop=mesh.loops[li]
+                            print(len(uvVerts),li)
+                            (vt, uv) = uvVerts[i]
+                            i+=1
+                            f.write("vn %.4f %.4f %.4f\n" % (loop.normal[0],loop.normal[1],loop.normal[2]))
+                            line.append("%d/%d/%d" % (loop.vertex_index+1, vt+1, norm_cnt))
+                            norm_cnt+=1
                         f.write(" ".join(line))
                         f.write("\n")
 
