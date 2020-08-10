@@ -14,6 +14,7 @@ _licenses.append(("CC-BY", "CC-BY", "Creative Commons Attribution",             
 _licenses.append(("AGPL",  "AGPL", "Affero Gnu Public License (don't use unless absolutely necessary)",     3))
 _licenseDescription = "Set an output license for the clothes. This will have no practical effect apart from being included in the written MHCLO file."
 
+_blendDescription = "Select human from blendfile"
 _tagsDescription = "Select Tags for MakeHuman"
 _tagsDescriptionAdd = "Enter Tags for MakeHuman, separate by comma"
 
@@ -31,6 +32,34 @@ _destination.append(("tongue", "tongue", "Tongue subdir", 6))
 _destination_description = "This is the subdirectory (under data) where we should put the produced clothes"
 
 mh_tags = {}
+mh_readitem = []
+
+def enumlist_meshes(self, context):
+    """Populate Mesh list"""
+    scene = context.scene
+    #
+    # do that once, otherwise we will read this file again and again!
+    # 
+    global mh_readitem
+
+    if len(mh_readitem) ==  0:
+        cnt = 0
+        blendpath = os.path.join(os.path.dirname(__file__), "humans")
+        if os.path.isdir(blendpath):
+            for filename in os.listdir(blendpath):
+                if filename.endswith(".blend"):
+                    filepath = os.path.join(blendpath, filename)
+
+                    with bpy.data.libraries.load(filepath) as (data_from, data_to):
+                        for obj in data_from.objects:
+                            if obj.startswith("mh_"):
+                                item = filename[:-6] + "-" + obj[3:]
+                                load = os.path.join(filepath,obj)
+                                mh_readitem.append((load, item, ""))
+                                cnt += 1
+        if cnt == 0:    # append dummy entry
+            mh_readitem.append(("---", "---", ""))
+    return mh_readitem
 
 def extraProperties():
     #
@@ -39,39 +68,33 @@ def extraProperties():
     bpy.types.Scene.MhClothesLicense = bpy.props.EnumProperty(items=_licenses, name="clothes_license", description=_licenseDescription, default="CC0")
     bpy.types.Scene.MhClothesAuthor  = StringProperty(name="Author name", description="", default="unknown")
 
-    # read the tag froms a json file to keep then flexible
+    # read the tag from a json file to keep things flexible
     #
     tagfile = os.path.join(os.path.dirname(__file__), "data", "tags.json")
-    cfile = open (tagfile, "r")
-    tags = json.load(cfile)
-    cfile.close()
+    with open(tagfile, "r") as cfile: # the recommended way, in case something goes wrong
+        tags = json.load(cfile)
 
     mh_sel = {}
-    tag_groups = ["gender", "dresscode", "activity", "period", "type"]
-    for group in tag_groups:
+
+    #tag groups can be loaded from the json file, for the sake of flexibility (see above...)
+
+    for group, gr_values in tags.items():
         mh_tags[group] = []
+        for cnt, (name, value) in enumerate(gr_values.items(), start=1):
+            com = value.get('com', 'generic tag ' + name)             # preset for comment
+            disp = value.get('text', name)
+            if value.get('sel', False): # this one should be preselected
+                mh_sel[group] = name
+            mh_tags[group].append((name, disp, com, cnt)) # create entry
+        setattr(bpy.types.Scene, 'MHTags_'+ group.lower(), EnumProperty(items=mh_tags[group], name=group.capitalize(),
+                                                            description=_tagsDescription, default=mh_sel[group]))
 
-        groupitems = tags[group]
-        cnt = 1
-        for item in groupitems:
-            com = "generic tag " + item             # preset for comment
-            if "com" in  groupitems[item]:          # normal comment is read from file
-                com = groupitems[item]["com"]
-            disp = item
-            if "text" in  groupitems[item]:         # in case we use an alternative text to show the item
-                disp =  groupitems[item]["text"]
-            if "sel" in  groupitems[item]:          # this one should be preselected
-                mh_sel[group] =  item
-            mh_tags[group].append((item, disp, com, cnt))   # create entry
-            cnt += 1
-
-    bpy.types.Scene.MHTags_gender = bpy.props.EnumProperty(items=mh_tags["gender"], name="Gender", description=_tagsDescription, default=mh_sel["gender"])
-    bpy.types.Scene.MHTags_dresscode = bpy.props.EnumProperty(items=mh_tags["dresscode"], name="Dress code", description=_tagsDescription, default=mh_sel["dresscode"])
-    bpy.types.Scene.MHTags_activity = bpy.props.EnumProperty(items=mh_tags["activity"], name="Activity", description=_tagsDescription, default=mh_sel["activity"])
-    bpy.types.Scene.MHTags_period = bpy.props.EnumProperty(items=mh_tags["period"], name="Period", description=_tagsDescription, default=mh_sel["period"])
-    bpy.types.Scene.MHTags_type = bpy.props.EnumProperty(items=mh_tags["type"], name="Clothes type", description=_tagsDescription, default=mh_sel["type"])
+    bpy.types.Scene.MH_predefinedMeshes = bpy.props.EnumProperty(items=enumlist_meshes, name="Human", description=_blendDescription)
     bpy.types.Scene.MHAdditionalTags = bpy.props.StringProperty(name="Additional tags", description=_tagsDescriptionAdd, default="")
     bpy.types.Scene.MHClothesDestination = bpy.props.EnumProperty(items=_destination, name="Clothes destination", description=_destination_description, default="clothes")
+    bpy.types.Scene.MHOverwrite = BoolProperty(name="Overwrite existent clothes", description="Must be marked, if you want to replace old files (.mhclo, .obj etc.)", default=False)
+    bpy.types.Scene.MHAllowMods = BoolProperty(name="Allow modifiers", description="Must be marked, if modifiers should be taken into account", default=True)
+    bpy.types.Scene.MhMcMakeSkin = BoolProperty(name="Use makeskin", description="Use MakeSkin (if available) for writing material. This will be silently ignored if MakeSkin is not installed. For this to work you should have created the object's material using MakeSkin.", default=False)
 
     # Object properties, normally set by MPFB
     if not hasattr(bpy.types.Object, "MhObjectType"):

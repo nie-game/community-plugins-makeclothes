@@ -8,6 +8,10 @@ import uuid
 import shutil
 import mathutils
 from mathutils import Vector
+from .utils import checkMakeSkinAvailable, LEAST_REQUIRED_MAKESKIN_VERSION
+
+_EVALUATED_MAKESKIN = False
+_MAKESKIN_AVAILABLE = False
 
 _knownMeshes = {}                       # place to hold all jsons of meshes, used not to reload them again and again
                                         # normally there will be only a few meshes on disk
@@ -60,20 +64,6 @@ class _VertexMatch():
 
     def markRigid(self, humanVertexIndex):
         self.rigidMatch = humanVertexIndex
-
-    def setClosestIndices(self, v1, v2, v3, v1c = None, v2c = None, v3c = None ):
-        self.closestHumanVertexIndices[0] = v1
-        self.closestHumanVertexIndices[1] = v2
-        self.closestHumanVertexIndices[2] = v3
-
-        if v1c is None:
-            v1c = [0.0, 0.0, 0.0]
-        if v2c is None:
-            v2c = [0.0, 0.0, 0.0]
-        if v3c is None:
-            v3c = [0.0, 0.0, 0.0]
-
-        self.closestHumanVertexCoordinates = [v1c, v2c, v3c]
 
     def setWeights(self, w1, w2, w3):
         self.weights[0] = w1
@@ -137,13 +127,13 @@ class MakeClothes():
         self.clothesObj = clothesObj
         self.humanObj = humanObj
         if context:
-            self.clothesmesh = MHMesh(clothesObj, context=context, allow_modifiers=True)
+            self.clothesmesh = MHMesh(clothesObj, context=context, allow_modifiers=context.scene.MHAllowMods)
         else:
             self.clothesmesh = MHMesh(clothesObj)
         self.humanmesh = MHMesh(humanObj)
 
         # predefine size of the array needed 
-        self.vertexMatches = [None for dummy in range(len(self.clothesmesh.data.vertices))] 
+        self.vertexMatches = [None] * len(self.clothesmesh.data.vertices)
         self.exportName = exportName
         self.exportRoot = exportRoot
         self.exportLicense = license
@@ -153,6 +143,26 @@ class MakeClothes():
         self.deleteVerticesOutput = ""
         self.clothesmesh.getAdditionalIndices() 
         self.clothesmesh.getUVforExport()       # method to assign UVs to mesh
+        self.useMakeSkin = False
+
+        global _EVALUATED_MAKESKIN
+        global _MAKESKIN_AVAILABLE
+
+        if not _EVALUATED_MAKESKIN:
+            ms = checkMakeSkinAvailable()
+            if ms:
+                from makeskin import MAKESKIN_VERSION
+                if MAKESKIN_VERSION >= LEAST_REQUIRED_MAKESKIN_VERSION:
+                    _MAKESKIN_AVAILABLE = True
+                    print("A useful version of MakeSkin is available")
+                else:
+                    print("MakeSkin is available, but in a too old version. At least " + str(LEAST_REQUIRED_MAKESKIN_VERSION) + " is required. Not showing related options.")
+            else:
+                print("MakeSkin is not available or not enabled.")
+            _EVALUATED_MAKESKIN = True
+
+        if _MAKESKIN_AVAILABLE and context:
+            self.useMakeSkin = context.scene.MhMcMakeSkin
 
     #
     # here the work is done. __init__ cannot provide proper return codes
@@ -172,9 +182,9 @@ class MakeClothes():
 
         # also the groups have been tested we should avoid going on with an unknown group
         #
-        (b, vgroupname) = self.findClosestVertices()
+        (b, text) = self.findClosestVertices()
         if b is False:
-            return (False, "Cannot create search tree for group " + vgroupname + " on human. Number of vertices must be at least 3.")
+            return (False, text)
 
         self.findBestFaces()
         self.findWeightsAndDistances()
@@ -207,9 +217,27 @@ class MakeClothes():
         (b, hint) = self.writeObj()
         if b is False:
             return (False, hint)
-        (b, hint) = self.writeMhMat()
-        if b is False:
-            return (False, hint)
+
+        if self.useMakeSkin:
+            print("Using makeskin to write material")
+            from makeskin import MHMat as MakeSkinMat
+
+            mat = MakeSkinMat(self.clothesObj)
+            outputFile = os.path.join(self.dirName, self.cleanedName + ".mhmat")
+
+            checkImg = mat.checkAllTexturesAreSaved()
+            if checkImg:
+                return (False, checkImg)
+
+            errtext = mat.writeMHmat(self.clothesObj, outputFile)
+            if errtext:
+                return (False, checkImg)
+
+        else:
+            print("Using limited MakeClothes material model, ie not MakeSkin")
+            (b, hint) = self.writeMhMat()
+            if b is False:
+                return (False, hint)
 
         if True:
             self.writeDebug()
@@ -221,17 +249,29 @@ class MakeClothes():
             vgroupName = self.clothesmesh.vertexGroupNames[vgroupIdx]
             clothesVertices = self.clothesmesh.vertexGroupVertices[vgroupIdx]
 
+            # skip empty groups on clothes
+            #
+            if len(clothesVertices) == 0:
+                next
+
             # determine kd tree, also delivers number of vertices per group
             # 3 means rigid group, then an array is given
             #
             (size, kdtree) = self.humanmesh.vertexGroupKDTree(vgroupName) 
-            if size < 3:    # group with less 3 vertices does not work
-                return (False, vgroupName)
+            if size < 3:    # group with less than 3 vertices does not work
+                return (False, "Cannot create search tree for group " + vgroupName + " on human. Number of vertices must be at least 3.")
 
             #
             # special code for rigid group
             #
             if size == 3:
+                #
+                # first test for a degenerated triangle (like 3 verts forming a line)
+                #
+                area = mathutils.geometry.area_tri(kdtree[0].co, kdtree[1].co, kdtree[2].co)
+                if area < 0.0001:
+                    return (False, "Group " + vgroupName + ": The vertices create a triangle smaller than 0.0001, this will result in bad geometry")
+
                 for vertex in clothesVertices:
                     vertexMatch = _VertexMatch(vertex[0], vertex[1], vertex[2], vertex[3])  # idx x y z
                     hCoord = []

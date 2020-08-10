@@ -6,8 +6,17 @@
 import os
 import io
 import sys
+import bpy
 import inspect
+from addon_utils import check, paths, enable, modules
 
+# we need this for the standard obj-loader 
+#
+from mathutils import Matrix
+from bpy_extras.io_utils import axis_conversion
+from io_scene_obj import import_obj
+
+LEAST_REQUIRED_MAKESKIN_VERSION = 20200718
 _TRACING = True
 
 def getMyDocuments():
@@ -78,6 +87,41 @@ def getClothesRoot(subdir = None):
     mhdir = getMHDirectory()
     return os.path.join(mhdir,"data",subdir)
 
+# 
+# function to call standard object loader
+#
+def loadObjFile(context, filename):
+    #
+    # remember all objects
+    #
+    oldnames = []
+    for obj in context.scene.objects:
+        oldnames.append (obj.name)
+
+    global_matrix = (Matrix.Scale(1.0, 4) @ 
+        axis_conversion(from_forward='-Y',to_forward='-Z', from_up='Z', to_up='-Y',).to_4x4())
+    import_obj.load(context, filename, use_split_objects=False,
+        use_groups_as_vgroups=True, global_matrix=global_matrix)
+
+    #
+    # get all objects and figure out the new mesh
+    #
+    for obj in context.scene.objects:
+        if obj.name not in oldnames:
+           context.view_layer.objects.active = obj
+           bpy.ops.object.shade_smooth()
+           bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+           return (obj)
+
+    return (None)
+
+def checkMakeSkinAvailable():
+    for path in paths():
+        for mod_name, mod_path in bpy.path.module_names(path):
+            is_enabled, is_loaded = check(mod_name)
+            if mod_name == "makeskin":
+                return is_enabled and is_loaded
+    return False
 
 def trace(message = None):
     global _TRACING
