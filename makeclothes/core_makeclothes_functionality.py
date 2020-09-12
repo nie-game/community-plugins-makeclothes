@@ -85,7 +85,7 @@ class _VertexMatch():
             dz = self.distance[2]
 
             # write distances dx, dy, dz according to makehuman order
-            return "%d %d %d %.4f %.4f %.4f %.4f %.4f %.4f" % (v1, v2, v3, w1, w2, w3, dx, dz, -dy)
+            return "%d %d %d %.4f %.4f %.4f %.4f %.4f %.4f" % (v1, v2, v3, w1, w2, w3, dx, dy, dz)
         else:
             return str(self.exactMatch)
 
@@ -205,8 +205,8 @@ class MakeClothes():
             'zmin': dims['zmin'], 'zmax': dims['zmax']
         }
         self.scales[0] = self.humanmesh.getScale (dims['xmin'], dims['xmax'], 0)
-        self.scales[2] = self.humanmesh.getScale (dims['ymin'], dims['ymax'], 1) # scales-index
-        self.scales[1] = self.humanmesh.getScale (dims['zmin'], dims['zmax'], 2) # y and z are changed
+        self.scales[1] = self.humanmesh.getScale (dims['ymin'], dims['ymax'], 1) # scales-index
+        self.scales[2] = self.humanmesh.getScale (dims['zmin'], dims['zmax'], 2) # y and z are changed
 
         #
         # write the output files and check for errors
@@ -245,6 +245,7 @@ class MakeClothes():
         return (True, "")
 
     def findClosestVertices(self):
+        print("FCLG",self.clothesmesh.vertexGroupNames)
         for vgroupIdx in self.clothesmesh.vertexGroupNames.keys():
             vgroupName = self.clothesmesh.vertexGroupNames[vgroupIdx]
             clothesVertices = self.clothesmesh.vertexGroupVertices[vgroupIdx]
@@ -555,8 +556,8 @@ class MakeClothes():
                 f.write("material " + self.cleanedName + ".mhmat" + "\n\n")
                 f.write("uuid " + str(uuid.uuid4()) + "\n")
                 f.write("x_scale " + str(self.minmax['xmin']) + " " + str(self.minmax['xmax']) + " " + str(round(self.scales[0], 4)) + "\n")
-                f.write("y_scale " + str(self.minmax['zmin']) + " " + str(self.minmax['zmax']) + " " + str(round(self.scales[1], 4)) + "\n")
-                f.write("z_scale " + str(self.minmax['ymin']) + " " + str(self.minmax['ymax']) + " " + str(round(self.scales[2], 4)) + "\n")
+                f.write("y_scale " + str(self.minmax['ymin']) + " " + str(self.minmax['ymax']) + " " + str(round(self.scales[1], 4)) + "\n")
+                f.write("z_scale " + str(self.minmax['zmin']) + " " + str(self.minmax['zmax']) + " " + str(round(self.scales[2], 4)) + "\n")
                 f.write("max_pole " + str(self.clothesmesh.max_poles) + "\n")
                 f.write("z_depth " + str(self.clothesObj.MhZDepth) + "\n\n")
                 f.write("# Vertex info:\n")

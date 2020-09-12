@@ -16,7 +16,11 @@ def checkAllVerticesBelongToAVGroup(obj, markmesh=False):
     hint = ""
 
     for vert in obj.data.vertices:
-        if len(vert.groups) < 1:
+        l=0
+        for g in vert.groups:
+            if obj.vertex_groups[g.group].name[0:3]=="MH_":
+                l=l+1
+        if l < 1:
             b = False
             if markmesh is True:
                 vert.select = True
@@ -33,7 +37,11 @@ def checkAllVerticesBelongToAtMostOneVGroup(obj, markmesh=False):
     hint = ""
 
     for vert in obj.data.vertices:
-        if len(vert.groups) > 1:
+        l=0
+        for g in vert.groups:
+            if obj.vertex_groups[g.group].name[0:3]=="MH_":
+                l=l+1
+        if l > 1:
             b = False
             if markmesh is True:
                 vert.select = True
@@ -48,7 +56,8 @@ def checkAllVerticesBelongToAtMostOneVGroup(obj, markmesh=False):
 def checkVertexGroupAssignmentsAreNotCorrupt(obj, markmesh=False):
     validIndices = []
     for vg in obj.vertex_groups:
-        validIndices.append(vg.index)
+        if vg.name[0:3]=="MH_":
+            validIndices.append(vg.index)
     b = True
     hint = ""
     for vert in obj.data.vertices:
@@ -67,7 +76,8 @@ def checkAllVGroupsInFirstExistsInSecond(firstObj, secondObj):
     secondObjVGroups = []
 
     for vg in firstObj.vertex_groups:
-        firstObjVGroups.append(vg.name)
+        if vg.name[0:3]=="MH_":
+            firstObjVGroups.append(vg.name)
 
     for vg in secondObj.vertex_groups:
         secondObjVGroups.append(vg.name)

@@ -47,10 +47,11 @@ class MHMesh:
             raise ValueError("This object has no vertex groups. Refusing to continue.")
 
         for group in obj.vertex_groups:
-            if not group.name in self.vertexGroupNames:
-                ind = int(group.index)
-                self.vertexGroupNames[ind] = group.name
-                self._seedGroups[ind] = []
+            if group.name[0:3]=="MH_":
+                if not group.name in self.vertexGroupNames:
+                    ind = int(group.index)
+                    self.vertexGroupNames[ind] = group.name
+                    self._seedGroups[ind] = []
 
         for vertex in self.data.vertices:
             self.vertPolygons[vertex.index] = []    # supply an index to be filled, will contain all polygons connected to a vertex
