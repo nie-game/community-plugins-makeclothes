@@ -292,16 +292,30 @@ class MakeClothes():
                 hCoord = []
                 j = 0
                 exact = False
+                md=1000
+                mdi=None
                 for (co, index, dist) in kdtree.find_n(vertex[1:], 3):
                     if dist < 0.001:
                         vertexMatch.markExact(index)
                         exact = True
+                        #vertexMatch.closestHumanVertexIndices[0] = index
+                        #vertexMatch.closestHumanVertexIndices[1] = index
+                        #vertexMatch.closestHumanVertexIndices[2] = index
+                        #vertexMatch.closestHumanVertexCoordinates[0] = co
+                        #vertexMatch.closestHumanVertexCoordinates[1] = co
+                        #vertexMatch.closestHumanVertexCoordinates[2] = co
+                        #hCoord.append(self.humanmesh.allVertexCoordinates[index])
+                        #j += 1
                     elif exact is False:
                         vertexMatch.closestHumanVertexIndices[j] = index
                         vertexMatch.closestHumanVertexCoordinates[j] = co
                         hCoord.append(self.humanmesh.allVertexCoordinates[index])
                         j += 1
+                    if dist<md:
+                        md=dist
+                        mdi=index
                 if exact is False:
+                    print("NEXACT")
                     vertexMatch.closestHumanVertexCoordinates = hCoord
                 self.vertexMatches[vertex[0]] = vertexMatch
         return (True, "")
@@ -310,7 +324,8 @@ class MakeClothes():
         # In this method we will go through the vertexmatches and if needed switch which vertices are selected so that all
         # vertices belong to the same face.
         for vm in self.vertexMatches:
-            if not vm.exactMatch and not vm.rigidMatch:
+            print("EM",vm.exactMatch)
+            if (vm.exactMatch is None) and not vm.rigidMatch:
                 faceMatches = []
                 maxScore = 1
                 for i in [0, 1, 2]:
@@ -367,7 +382,7 @@ class MakeClothes():
 
     def findWeightsAndDistances(self):
         for vertexMatch in self.vertexMatches:
-            if not vertexMatch.exactMatch:
+            if vertexMatch.exactMatch is None:
                 # TODO: could be that further improvement like Thomas' mid vertex should be done
 
                 # To make the algorithm understandable I change our 3 vertices to triangle ABC and use Blender
@@ -448,8 +463,7 @@ class MakeClothes():
         with open(outputFile, "w") as f:
             f.write("clothesIdx,clVertX,clVertY,clVertZ,hIdx1,hVert1x,hVert1y,hVert1z,dist1,hIdx2,hVert2x,hVert2y,hVert2z,dist2,hIdx3,hVert3x,hVert3y,hVert3z,dist3,sumdist,dist1pct,dist2pct,dist3pct,medianX,medianY,medianZ,medDistX,medDistY,medDistZ\n")
             for vm in self.vertexMatches:
-
-                if not vm.exactMatch: # No need to debug exact matches
+                if vm.exactMatch is None: # No need to debug exact matches
                     f.write("%d,%.4f,%.4f,%.4f" % (vm.index, vm.x, vm.y, vm.z)) # clothes
                     sumdist = 0.0
                     dist = [0.0, 0.0, 0.0]
@@ -484,7 +498,7 @@ class MakeClothes():
 
     def selectHumanVertices(self):
         for vm in self.vertexMatches:
-            if not vm.exactMatch:
+            if vm.exactMatch is None:
                 for i in [0, 1, 2]:
                     idx = vm.closestHumanVertexIndices[i]
                     self.humanObj.data.vertices[idx].select = True
@@ -612,7 +626,6 @@ class MakeClothes():
                         i=0
                         for li in polygon.loop_indices:
                             loop=mesh.loops[li]
-                            print(len(uvVerts),li)
                             (vt, uv) = uvVerts[i]
                             i+=1
                             f.write("vn %.4f %.4f %.4f\n" % (loop.normal[0],loop.normal[1],loop.normal[2]))
